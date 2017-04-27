@@ -1,45 +1,36 @@
-# import data from ICES
 rm(list=ls())
 library("dplyr")
-library("ggplot2")
 
-source("options.R")
+#
+# Read text data files from ICES and combine them to a single file
+cat("Starting import.R\n")
+#--------------------------------------------------------------------------------------------------------------------------------
 
-#--------------------------------------
+file.biota <- "HELCOM_HZ_biota_20170203.txt"
+file.sediment <- "HELCOM_HZ_sediment_20170123.txt"
+file.water <- "HELCOM_HZ_water_20170118.txt"
+
+file.combined <- "data.Rda"
+datafolder <- "data_ICES/test/"
+
+variable.Assessment.Unit <- "HELCOM_L4"
+variable.Station <- "STATN"
+
+#--------------------------------------------------------------------------------------------------------------------------------
 
 df.biota<-read.table(paste0(datafolder,file.biota), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.sediment<-read.table(paste0(datafolder,file.sediment), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.water<-read.table(paste0(datafolder,file.water), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 
-df<-filter(df.sediment,PARAM=="AL",MUNIT %in% c("%","mg/kg","g/kg","ug/kg"))
+df.biota$Category <- "Biota"
+df.sediment$Category <- "Sediment"
+df.water$Category <- "Water"
 
-distinct(df,MUNIT)
+df <- bind_rows(df.biota,df.sediment,df.water)
 
-df$multiplier<-ifelse(df$MUNIT=="g/kg",0.1,
-                      ifelse(df$MUNIT=="mg/kg",1e-4,
-                             ifelse(df$MUNIT=="ug/kg",1e-7,1)))
+saveRDS(df,file=paste0(datafolder,file.combined))
 
-df$Value<-df$Value*df$multiplier
+cat("Finished import.R\n")
+#--------------------------------------------------------------------------------------------------------------------------------
 
-df$Value<-df$Value*ifelse(df$Value<0.02,1000,1)
 
-df$MUNIT<-"%"
-
-n1<-data.frame(names(df.biota))
-n2<-data.frame(names(df.sediment))
-n3<-data.frame(names(df.water))
-names(n1)<-c("biota")
-names(n2)<-c("sediment")
-names(n3)<-c("water")
-
-n2$biota<-n2$sediment
-n3$biota<-n3$water
-
-n<-left_join(n1,n2)
-n<-left_join(n,n3)
-
-test <- df.biota %>%
-  group_by_(variable.Assessment.Unit,variable.Station) %>%
-  ungroup %>%
-  group_by_(variable.Assessment.Unit) %>%
-  summarise(n=n())
