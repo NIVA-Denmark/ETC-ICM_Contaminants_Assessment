@@ -6,15 +6,15 @@ library("dplyr")
 cat("Starting import.R\n")
 #--------------------------------------------------------------------------------------------------------------------------------
 
-file.biota <- "HELCOM_HZ_biota_20170203.txt"
-file.sediment <- "HELCOM_HZ_sediment_20170123.txt"
-file.water <- "HELCOM_HZ_water_20170118.txt"
+file.biota <- "DOME_biota_20170428.txt"
+file.sediment <- "DOME_sediment_20170429.txt"
+file.water <- "DOME_water_20170429.txt"
 
-file.combined <- "data.Rda"
-datafolder <- "data_ICES/test/"
+file.r.biota <- "data_biota.Rda"
+file.r.sediment <- "data_sediment.Rda"
+file.r.water <- "data_water.Rda"
 
-variable.Assessment.Unit <- "HELCOM_L4"
-variable.Station <- "STATN"
+datafolder <- "data_ICES/"
 
 #--------------------------------------------------------------------------------------------------------------------------------
 
@@ -22,15 +22,11 @@ df.biota<-read.table(paste0(datafolder,file.biota), quote="",sep="\t", header=TR
 df.sediment<-read.table(paste0(datafolder,file.sediment), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.water<-read.table(paste0(datafolder,file.water), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 
-df.biota$Category <- "Biota"
-df.sediment$Category <- "Sediment"
-df.water$Category <- "Water"
-
-df <- bind_rows(df.biota,df.sediment,df.water)
-
-saveRDS(df,file=paste0(datafolder,file.combined))
+saveRDS(df.biota,file=paste0(datafolder,file.r.biota))
+saveRDS(df.sediment,file=paste0(datafolder,file.r.sediment))
+saveRDS(df.water,file=paste0(datafolder,file.r.water))
 
 cat("Finished import.R\n")
-#--------------------------------------------------------------------------------------------------------------------------------
+
 
 

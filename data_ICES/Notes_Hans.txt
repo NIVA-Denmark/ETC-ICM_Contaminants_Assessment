@@ -1,0 +1,26 @@
+Jeg har vedlagt alle biota data fra DOME fra og med 2008 samt ud fra din parameterliste (flagged som biota). Data er som HELCOM filerne ‘tab’ separeret og jeg har indsat en extra kolonne med GridID. Nogle er ikke udfyldt, det er fordi de er udenfor grid, det gælder f.eks. de Færøske data.
+Jeg har inkluderet nogle extra data som kan benyttes til normalisering. Hvis tblBioID er identisk, så er de fra samme subsample.
+
+LNMEA – Length mean
+DRYWT% - Dryweight percent
+EXLIP% - Extractable lipid percent
+FATWT% - Fat weight percent
+LIPIDWT% - Lipid weight percent
+
+Der er historiske/metodiske grunde til at der er forskellige lipid/fat percent. Det er I princippet det same. Hvis flere af deme r malt, så benytter OSPAR følgende prioritering:
+“
+For basis conversions between L and W FATWT%, LIPIDWT% or EXLIP% are used (priority 1. FATWT%, 2. LIPIDWT%, 3. EXLIP%) 
+”
+
+
+
+I sediment datasættet har jeg også inkluderet et par ekstra parameter til normalisering.:
+AL – Aluminium
+Li – Lithium
+CORG – Organic carbon
+DRYWT% - Dry weight percent
+
+Hvis du vælger data fra samme sample (tblSampleID) og samme sediment dybde bør du have de samhørende værdier.
+
+Mht seawater er der nogle mg/kg units, som muligvis er fejlbehæftede. Dem vil jeg lige undersøge på mandag.
+
