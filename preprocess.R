@@ -9,11 +9,13 @@ file.r.sediment <- "data_sediment.Rda"
 file.r.water <- "data_water.Rda"
 datafolder <- "data_ICES/"
 thrshfolder <- "thresholds/"
+resfolder <- "../gis/CHASE_results/"
 
-df.biota <- readRDS(paste0(datafolder,file.r.biota))
+df.biota.in <- readRDS(paste0(datafolder,file.r.biota))
 df.sediment <- readRDS(paste0(datafolder,file.r.sediment))
 df.water <- readRDS(paste0(datafolder,file.r.water))
 
+df.biota <- df.biota.in
 
 df.conversion<-read.table(paste0(datafolder,"species_avg_lipid_drywt_OSPAR.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.species<-read.table(paste0(datafolder,"species_type.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
@@ -24,9 +26,11 @@ df.thrsh <- read.table(paste0(thrshfolder,"thresholds.txt"), quote="",sep="\t", 
 df.groups <- read.table(paste0(thrshfolder,"groups.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.unit.factor <- read.table(paste0(thrshfolder,"unit_factor.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 
+
 df.groups <- select(df.groups,PARAM,GROUP,Multiplier,Required)
 
-df.thrsh <- filter(df.thrsh,!PARAM=="")
+df.thrsh <- filter(df.thrsh,PARAM!="")
+df.thrsh <- filter(df.thrsh,is.na(Exclude))
 df.thrsh.1 <- filter(df.thrsh,GROUP==1)
 df.thrsh.2 <- filter(df.thrsh,is.na(GROUP))
 df.thrsh.1 <-left_join(df.thrsh.1,df.groups,by=c("PARAM"="GROUP"))
@@ -38,6 +42,9 @@ df.thrsh.2$Multiplier <- 1
 df.thrsh.2$Required <- NA
 df.thrsh <- rbind(df.thrsh.1,df.thrsh.2)
 rm(list=c("df.thrsh.1","df.thrsh.2"))
+
+df.thrsh.sed<-filter(df.thrsh,Category=="Sediment")
+df.thrsh.wat<-filter(df.thrsh,Category=="Water")
 
 
 # where threshold is specified for both shellfish and fish, then make a copy foreach of them
@@ -67,6 +74,9 @@ df.biota <- filter(df.biota,MUNIT!="umol/min/mg protein")
 df.biota$MUNIT <- ifelse(df.biota$MUNIT=="ug Sn/kg","ug/kg",df.biota$MUNIT)
 df.biota$MATRX<-ifelse(df.biota$MATRX=="MU&EP","MU",df.biota$MATRX)
 df.biota$Species<-ifelse(df.biota$Species=="Clupea harengus membras","Clupea harengus",df.biota$Species)
+df.biota$Value<-df.biota$Value*ifelse(df.biota$PARAM %in% c("DRYWT%","EXLIP%","FATWT%","LIPIDWT%") & df.biota$Value > 1000,0.01,1)
+
+
 
 df.biota <- left_join(df.biota,df.species,by=c("Species"="Species"))
 df.biota <- filter(df.biota,Type %in% c("Fish","Shellfish"))
@@ -79,27 +89,27 @@ df.biota <- select(df.biota,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,
 
 df.biota.norm <- df.biota %>%
   filter(PARAM %in% c("LNMEA","DRYWT%","EXLIP%","FATWT%","LIPIDWT%")) %>%
-  group_by(tblBioID,tblSampleID,Species,PARAM,MATRX,BASIS,MUNIT) %>%
+  group_by(tblBioID,tblSampleID,Type,Species,PARAM,MATRX,BASIS,MUNIT) %>%
   summarize(Value=mean(Value,na.rm=TRUE)) %>%
   ungroup()
 
 
 df.biota.DRYWT <- df.biota.norm %>%
   filter(PARAM == "DRYWT%") %>%
-  select(tblBioID,tblSampleID,Species,MATRX,DRYWT=Value)
+  select(tblBioID,tblSampleID,Type,Species,MATRX,DRYWT=Value)
 df.biota.EXLIP <- df.biota.norm %>%
   filter(PARAM == "EXLIP%") %>%
-  select(tblBioID,tblSampleID,Species,MATRX,EXLIP=Value)
+  select(tblBioID,tblSampleID,Type,Species,MATRX,EXLIP=Value)
 df.biota.FATWT <- df.biota.norm %>%
   filter(PARAM == "FATWT%") %>%
-  select(tblBioID,tblSampleID,Species,MATRX,FATWT=Value)
+  select(tblBioID,tblSampleID,Type,Species,MATRX,FATWT=Value)
 df.biota.LIPIDWT <- df.biota.norm %>%
   filter(PARAM == "LIPIDWT%") %>%
-  select(tblBioID,tblSampleID,Species,MATRX,LIPIDWT=Value)
+  select(tblBioID,tblSampleID,Type,Species,MATRX,LIPIDWT=Value)
 
-df.biota.norm<-full_join(df.biota.DRYWT,df.biota.FATWT,by=c("tblBioID","tblSampleID","Species","MATRX"))
-df.biota.norm<-full_join(df.biota.norm,df.biota.LIPIDWT,by=c("tblBioID","tblSampleID","Species","MATRX"))
-df.biota.norm<-full_join(df.biota.norm,df.biota.EXLIP,by=c("tblBioID","tblSampleID","Species","MATRX"))
+df.biota.norm<-full_join(df.biota.DRYWT,df.biota.FATWT,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
+df.biota.norm<-full_join(df.biota.norm,df.biota.LIPIDWT,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
+df.biota.norm<-full_join(df.biota.norm,df.biota.EXLIP,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
 
 df.biota.norm$FATWT <- ifelse(is.na(df.biota.norm$FATWT),
                                  ifelse(is.na(df.biota.norm$LIPIDWT),
@@ -114,13 +124,16 @@ df.biota <-left_join(df.biota, df.biota.norm)
 df.thrsh.be <- filter(df.thrsh,Category=="BioEffects") #Threshold.Species,
 df.thrsh <- select(df.thrsh,PARAM,GROUP,Category,Biota.Type,Threshold.Unit,Threshold.BASIS,Threshold.Tissue,Threshold.Value,Multiplier,Required)
 
-rm(list=c("df.biota.DRYWT","df.biota.FATWT","df.biota.EXLIP","df.biota.LIPIDWT","df.biota.norm"))
+rm(list=c("df.biota.DRYWT","df.biota.FATWT","df.biota.EXLIP","df.biota.LIPIDWT"))
+#rm(list=c("df.biota.DRYWT","df.biota.FATWT","df.biota.EXLIP","df.biota.LIPIDWT","df.biota.norm"))
 
 df.bioeffects<-filter(df.biota,PARAM %in% c("VDSI","MNC","LMD"))
 df.biota<-filter(df.biota,!PARAM %in% c("VDSI","MNC","LMD"))
 
 
-# ------------------------ bioeffects -----------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------ bioeffects ------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 
 # VDSI for Littorina, Buccinum and Nassarius 
@@ -132,18 +145,45 @@ df.biota<-filter(df.biota,!PARAM %in% c("VDSI","MNC","LMD"))
 #  Nucella lapillus
 
 df.bioeffects.1<-inner_join(df.bioeffects,
-                           select(df.thrsh.be,PARAM,Threshold.Species,Threshold.Unit,Threshold.Value),
+                           select(df.thrsh.be,Substance.name,PARAM,Threshold.Species,Threshold.Unit,Threshold.Value),
                            by=c("PARAM"="PARAM","Species"="Threshold.Species"))
 df.bioeffects.2<-inner_join(df.bioeffects,
-                            select(df.thrsh.be,PARAM,Biota.Type,Threshold.Unit,Threshold.Value),
+                            select(df.thrsh.be,Substance.name,PARAM,Biota.Type,Threshold.Unit,Threshold.Value),
                             by=c("PARAM"="PARAM","Type"="Biota.Type"))
 
 df.bioeffects<-rbind(df.bioeffects.1,df.bioeffects.2)
+rm(list=c("df.bioeffects.1","df.bioeffects.2"))
 
 df.bioeffects$RESPONSE<-ifelse(df.bioeffects$PARAM=="LMD",-1,1)
 
+df.bioeffects<-df.bioeffects %>%
+  group_by(Country,GridID,MYEAR,DATE,Substance.name,PARAM,
+           Threshold.Unit,Threshold.Value,RESPONSE) %>%
+  summarise(Value=sum(Value,na.rm=TRUE),n=n()) %>%
+  ungroup()
 
+#df.bioeffects.1<-filter(df.bioeffects.1,GridID=="100kmE40N37")
+# We now have station/date averages (and sums for ggroup variables) 
+
+# Take the average (+median within GridID)
+df.bioeffects<-df.bioeffects %>%
+  group_by(GridID,Substance.name,PARAM,Threshold.Unit,Threshold.Value,RESPONSE) %>%
+  summarise(Median=median(Value,na.rm=TRUE),Value=mean(Value,na.rm=TRUE),n=n()) %>%
+  ungroup()
+
+df.bioeffects$CR<-ifelse(df.bioeffects$RESPONSE<1,df.bioeffects$Threshold.Value/df.bioeffects$Value,df.bioeffects$Value/df.bioeffects$Threshold.Value)
+
+df.chase.bioeffects<-df.bioeffects %>%
+  group_by(GridID) %>%
+  summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
+  ungroup()
+
+df.chase.bioeffects$CSum<-df.chase.bioeffects$SumCR/df.chase.bioeffects$n
+
+
+# ------------------------------------------------------------------------------------------
 # ------------------------ biota -----------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 cat(paste0(nrow(df.biota)," rows\n"))
 
@@ -204,45 +244,236 @@ df.biota<-arrange(df.biota,Country,GridID,MYEAR,DATE,Category,Species,PARAM,GROU
 #find the factor for unit conversion  
 df.biota <- left_join(df.biota,df.unit.factor,by=c("MUNIT","Threshold.Unit"))
 
-test<-filter(df.biota,is.na(factor.basis))
-test2<-distinct(test,Species,PARAM)
-
 df.biota$Value<-df.biota$Value*df.biota$factor.basis*df.biota$Factor.Unit
-df.biota$Unit<-df.biota$Threshold.Unit
 df.biota$BASIS<-df.biota$Threshold.BASIS
 df.biota$Unit<-df.biota$Threshold.Unit
 
 df.biota<-df.biota %>%
-  select(Country,GridID,MYEAR,DATE,Category,Species,PARAM,GROUP,
+  select(Country,GridID,MYEAR,DATE,Category,Type,Species,PARAM,GROUP,
          BASIS=Threshold.BASIS,UNIT=Threshold.Unit,Tissue=Threshold.Tissue,
          Value,Multiplier,Threshold=Threshold.Value,Required,
          tblBioID,tblSampleID,tblParamID)
 
-df.biota.1<-df.biota %>%
-  group_by(Country,GridID,MYEAR,DATE,Category,Species,PARAM,GROUP,
+df.biota<-df.biota %>%
+  group_by(Country,GridID,MYEAR,DATE,Category,Type,Species,PARAM,GROUP,
          BASIS,UNIT,Tissue,Multiplier,Threshold,Required) %>%
   summarise(Value=mean(Value,na.rm=TRUE)) %>% 
   ungroup()
 
-df.biota.1$Value<-df.biota.1$Value*df.biota.1$Multiplier
+df.biota$Value<-df.biota$Value*df.biota$Multiplier
 
-df.biota.2<-df.biota.1 %>%
-  group_by(Country,GridID,MYEAR,DATE,Category,Species,GROUP,
+
+df.biota<-df.biota %>%
+  group_by(Country,GridID,MYEAR,DATE,Category,Type,Species,GROUP,
            BASIS,UNIT,Tissue,Threshold) %>%
-  summarise(Value=sum(Value,na.rm=TRUE),nreq=sum(Required,na.rm=TRUE),n=n())
+  summarise(Value=sum(Value,na.rm=TRUE),nreq=sum(Required,na.rm=TRUE),n=n()) %>%
+  ungroup()
 
-df.biota.2$CR<-df.biota.2$Value/df.biota.2$Threshold
+# We now have station/date averages (and sums for ggroup variables) 
 
-test<-df.biota.2 %>%
-  group_by(Country,GridID,MYEAR,DATE,Category,Species,GROUP) %>%
-  summarise(n=n())
+# Take the average (+median within GridID)
+df.biota<-df.biota %>%
+  group_by(GridID,Category,Type,GROUP,BASIS,UNIT,Tissue,Threshold) %>%
+  summarise(Value=mean(Median=median(Value,na.rm=TRUE),Value,na.rm=TRUE),n=n()) %>%
+  ungroup()
 
-# test<-df.biota.norm %>%
-#   spread(PARAM,Value)
-# 
-# df.biota$Category <- "Biota"
-# df.sediment$Category <- "Sediment"
-# df.water$Category <- "Water"
+df.biota$CR<-df.biota$Value/df.biota$Threshold
+
+df.chase.biota<-df.biota %>%
+  group_by(GridID) %>%
+  summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
+  ungroup()
+
+df.chase.biota$CSum<-df.chase.biota$SumCR/sqrt(df.chase.biota$n)
+
+# ------------------------------------------------------------------------------------------
+# ------------------------ sediment ------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+df.sed <- df.sediment
+df.sed$MUNIT <- ifelse(df.sed$MUNIT=="ug Sn/kg","ug/kg",df.sed$MUNIT)
+df.sed$Value <- df.sed$Value*ifelse(df.sed$QFLAG=="<",0.5,1)
+df.sed <- select(df.sed,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,
+                               Latitude,Longitude,UNCRT,tblSpotID,
+                               tblUploadID,tblAnalysisID,QFLAG,
+                               LMQNT))
+df.sed <- filter(df.sed,DEPHU<0.01)
+df.sed$PARAM<-ifelse(df.sed$PARAM=="Cr","CR",df.sed$PARAM)
+
+df.sed.norm <- df.sed %>%
+  filter(PARAM %in% c("AL","DRYWT%","Li","CORG")) %>%
+  group_by(tblSampleID,PARAM,MATRX,BASIS,MUNIT) %>%
+  summarize(Value=mean(Value,na.rm=TRUE)) %>%
+  ungroup()
+
+unit<-c("g/kg","mg/kg","ug/kg","ug/g","%")
+factor<-c(0.001,1e-6,1e-9,1e-6,1)
+factors<-data.frame(unit,factor,stringsAsFactors = FALSE)
+
+df.sed.DRYWT <- df.sed.norm %>%
+  filter(PARAM == "DRYWT%") %>%
+  select(tblSampleID,MATRX,BASIS,Value,MUNIT) %>%
+  left_join(factors,by=c("MUNIT"="unit")) %>%
+  mutate(DRYWT=Value*factor,MUNIT="%") %>%
+  select(-c(factor,MUNIT,Value))
+
+df.sed.AL <- df.sed.norm %>%
+  filter(PARAM == "AL") %>%
+  select(tblSampleID,MATRX,BASIS,Value,MUNIT) %>%
+  left_join(factors,by=c("MUNIT"="unit"))  %>%
+  mutate(AL=Value*factor,MUNIT="%") %>%
+  select(-c(factor,MUNIT,Value))
+  
+df.sed.CORG <- df.sed.norm %>%
+  filter(PARAM == "CORG") %>%
+  select(tblSampleID,MATRX,BASIS,Value,MUNIT) %>%
+  left_join(factors,by=c("MUNIT"="unit")) %>%
+  mutate(CORG=Value*factor,MUNIT="%") %>%
+  select(-c(factor,MUNIT,Value))
+
+df.sed.norm<-full_join(df.sed.DRYWT,df.sed.AL,by=c("tblSampleID","MATRX","BASIS"))
+df.sed.norm<-full_join(df.sed.norm,df.sed.CORG,by=c("tblSampleID","MATRX","BASIS"))
+
+rm(list=c("df.sed.AL","df.sed.CORG","df.sed.DRYWT"))
+df.sed <- df.sed %>%
+  filter(!PARAM %in% c("AL","DRYWT%","Li","CORG")) 
+  
+df.sed <- left_join(df.sed,df.sed.norm,by=c("tblSampleID","MATRX","BASIS"))
+
+df.thrsh.sed <- df.thrsh.sed %>%
+  select(PARAM,GROUP,Threshold.Unit,Threshold.BASIS,REF.PARAM,REF.VALUE,REF.UNIT,Threshold.Value,Threshold.Unit,Required)
+df.thrsh.sed$REF.PARAM<-ifelse(df.thrsh.sed$REF.PARAM=="","CORG",df.thrsh.sed$REF.PARAM)
+df.thrsh.sed$REF.VALUE<-ifelse(is.na(df.thrsh.sed$REF.VALUE),
+                               ifelse(df.thrsh.sed$REF.PARAM=="CORG",2.5,
+                                      ifelse(df.thrsh.sed$REF.PARAM=="AL",5,
+                                             df.thrsh.sed$REF.VALUE)),
+                               df.thrsh.sed$REF.VALUE)
+df.thrsh.sed$REF.UNIT<-"%"
+
+df.sed<-left_join(df.sed,df.thrsh.sed,by=c("PARAM"="PARAM"))
+
+df.sed$factor<-ifelse(df.sed$REF.PARAM=="AL" & !is.na(df.sed$AL) & df.sed$AL > 0.5,df.sed$AL*df.sed$REF.VALUE,1)
+df.sed$factor<-ifelse(df.sed$REF.PARAM=="CORG" & !is.na(df.sed$CORG),df.sed$CORG*df.sed$REF.VALUE,df.sed$factor)
+
+df.sed <- left_join(df.sed,df.unit.factor,by=c("MUNIT","Threshold.Unit"))
+
+df.sed$Value<-df.sed$Value*df.sed$factor*df.sed$Factor.Unit
+
+df.sed$BASIS<-df.sed$Threshold.BASIS
+df.sed$Unit<-df.sed$Threshold.Unit
+
+df.sed<-df.sed %>%
+  filter(!is.na(Threshold.Value)) %>%
+  select(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Value,Threshold=Threshold.Value,Required) %>%
+  arrange(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Threshold)
+
+df.sed<-df.sed %>%
+  group_by(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Threshold,Required) %>%
+  summarise(Value=mean(Value),na.rm=TRUE) %>%
+  ungroup()
+
+# combine group variables
+df.sed<-df.sed %>%
+  group_by(Country,GridID,MYEAR,DATE,GROUP,Unit,Threshold,Required) %>%
+  summarise(Value=sum(Value),n=n(),nreq=sum(Required)) %>%
+  ungroup()
+
+df.sed$CR<-df.sed$Value/df.sed$Threshold
+
+df.chase.sed<-df.sed %>%
+  group_by(GridID) %>%
+  summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
+  ungroup()
+
+df.chase.sed$CSum<-df.chase.sed$SumCR/sqrt(df.chase.sed$n)
+
+# ------------------------------------------------------------------------------------------
+# ------------------------ sediment ------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 
-#--------------------------------------------------------------------------------------------------------------------------------
+df.wat <- df.water
+df.wat$MUNIT <- ifelse(df.wat$MUNIT=="ug Sn/kg","ug/kg",df.wat$MUNIT)
+df.wat$Value <- df.wat$Value*ifelse(df.wat$QFLAG=="<",0.5,1)
+df.wat <- df.wat %>%
+  select(Country,GridID,MYEAR,DATE,PARAM,Value,MUNIT) %>%
+  left_join(select(df.thrsh.wat,GROUP,PARAM,Threshold.Unit,Threshold.Value,Required),by=c("PARAM")) %>%
+  filter(!is.na(Threshold.Value))
+
+df.wat<-df.wat %>%
+  left_join(df.unit.factor,by=c("MUNIT","Threshold.Unit"))
+
+df.wat$Value<-df.wat$Value*df.wat$Factor.Unit
+df.wat <- df.wat %>%
+  select(Country,GridID,MYEAR,DATE,GROUP,PARAM,Unit=Threshold.Unit,Value,Threshold=Threshold.Value,Required)
+
+# combine group variables
+df.wat<-df.wat %>%
+  group_by(Country,GridID,MYEAR,DATE,GROUP,Unit,Threshold,Required) %>%
+  summarise(Value=sum(Value),n=n(),nreq=sum(Required)) %>%
+  ungroup()
+
+df.wat$CR<-df.wat$Value/df.wat$Threshold
+
+df.chase.wat<-df.wat %>%
+  group_by(GridID) %>%
+  summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
+  ungroup()
+
+df.chase.wat$CSum<-df.chase.wat$SumCR/sqrt(df.chase.wat$n)
+
+# ------------------------------------------------------------------------------------------
+# ------------------------ SUMMARY ------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+
+df.chase.sed$Category<-"Sediment"
+df.chase.biota$Category<-"Biota"
+df.chase.bioeffects$Category<-"Bio.Effects"
+df.chase.wat$Category<-"Water"
+
+df.CHASE.QE<-rbind(df.chase.bioeffects,df.chase.biota,df.chase.sed,df.chase.wat)
+
+df.CHASE.QE <- df.CHASE.QE %>%
+  filter(GridID!="")
+
+df.CHASE <- df.CHASE.QE %>%
+  group_by(GridID) %>%
+  summarise(CHASE=max(CSum))
+
+df.CHASE <- df.CHASE %>%
+  left_join(select(df.CHASE.QE,GridID,CSum,Category),by=c("GridID"="GridID","CHASE"="CSum")) %>%
+  mutate(Worst=Category) %>%
+  select(-c(Category))
+
+df.CHASE_TRNSP<-df.CHASE.QE %>%
+  select(GridID,Category,CSum) %>%
+  ungroup() %>%
+  spread(Category,CSum) %>%
+  left_join(df.CHASE,by=c("GridID"="GridID"))
+
+df.CHASE_TRNSP$CHASE_CAT<-ifelse(df.CHASE_TRNSP$CHASE>0.5,2,1)
+df.CHASE_TRNSP$CHASE_CAT<-ifelse(df.CHASE_TRNSP$CHASE>1,3,df.CHASE_TRNSP$CHASE_CAT)
+df.CHASE_TRNSP$CHASE_CAT<-ifelse(df.CHASE_TRNSP$CHASE>5,4,df.CHASE_TRNSP$CHASE_CAT)
+df.CHASE_TRNSP$CHASE_CAT<-ifelse(df.CHASE_TRNSP$CHASE>10,5,df.CHASE_TRNSP$CHASE_CAT)
+
+df.CHASE_TRNSP$BIOEFF_CAT<-ifelse(df.CHASE_TRNSP$Bio.Effects>0.5,2,1)
+df.CHASE_TRNSP$BIOEFF_CAT<-ifelse(df.CHASE_TRNSP$Bio.Effects>1,3,df.CHASE_TRNSP$BIOEFF_CAT)
+df.CHASE_TRNSP$BIOEFF_CAT<-ifelse(df.CHASE_TRNSP$Bio.Effects>5,4,df.CHASE_TRNSP$BIOEFF_CAT)
+df.CHASE_TRNSP$BIOEFF_CAT<-ifelse(df.CHASE_TRNSP$Bio.Effects>10,5,df.CHASE_TRNSP$BIOEFF_CAT)
+
+df.CHASE_TRNSP$BIOTA_CAT<-ifelse(df.CHASE_TRNSP$Biota>0.5,2,1)
+df.CHASE_TRNSP$BIOTA_CAT<-ifelse(df.CHASE_TRNSP$Biota>1,3,df.CHASE_TRNSP$BIOTA_CAT)
+df.CHASE_TRNSP$BIOTA_CAT<-ifelse(df.CHASE_TRNSP$Biota>5,4,df.CHASE_TRNSP$BIOTA_CAT)
+df.CHASE_TRNSP$BIOTA_CAT<-ifelse(df.CHASE_TRNSP$Biota>10,5,df.CHASE_TRNSP$BIOTA_CAT)
+
+df.CHASE_TRNSP$SED_CAT<-ifelse(df.CHASE_TRNSP$Sediment>0.5,2,1)
+df.CHASE_TRNSP$SED_CAT<-ifelse(df.CHASE_TRNSP$Sediment>1,3,df.CHASE_TRNSP$SED_CAT)
+df.CHASE_TRNSP$SED_CAT<-ifelse(df.CHASE_TRNSP$Sediment>5,4,df.CHASE_TRNSP$SED_CAT)
+df.CHASE_TRNSP$SED_CAT<-ifelse(df.CHASE_TRNSP$Sediment>10,5,df.CHASE_TRNSP$SED_CAT)
+
+df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>0.5,2,1)
+df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>1,3,df.CHASE_TRNSP$WAT_CAT)
+df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>5,4,df.CHASE_TRNSP$WAT_CAT)
+df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>10,5,df.CHASE_TRNSP$WAT_CAT)
+
+
+write.table(df.CHASE_TRNSP,file=paste0(resfolder,"CHASE_results.csv"), row.names=FALSE,quote=FALSE,sep=',', na="")
