@@ -2,20 +2,35 @@ rm(list=ls())
 library("dplyr")
 library("tidyr")
 
-cat("Starting preprocess.R\n")
+cat("Starting assessment.R\n")
 #--------------------------------------------------------------------------------------------------------------------------------
-file.r.biota <- "data_biota.Rda"
-file.r.sediment <- "data_sediment.Rda"
-file.r.water <- "data_water.Rda"
+file.r.biota <- "data_ICES/data_biota_DOME.Rda"
+file.r.sediment <- "data_ICES/data_sediment_DOME.Rda"
+file.r.water <- "data_ICES/data_water_DOME.Rda"
+
+file.r.biota.2 <- "data_ICES/data_biota_EIONET.Rda"
+file.r.sediment.2 <- "data_ICES/data_sediment_EIONET.Rda"
+file.r.water.2 <- "data_ICES/data_water_EIONET.Rda"
+
+file.r.biota.3 <- "data_PT/data_biota_PT.Rda"
+file.r.sediment.3 <- "data_PT/data_sediment_PT.Rda"
+file.r.water.3 <- "data_PT/data_water_PT.Rda"
+
 datafolder <- "data_ICES/"
 thrshfolder <- "thresholds/"
 resfolder <- "../gis/CHASE_results/"
 
-df.biota.in <- readRDS(paste0(datafolder,file.r.biota))
-df.sediment <- readRDS(paste0(datafolder,file.r.sediment))
-df.water <- readRDS(paste0(datafolder,file.r.water))
+df.biota <- readRDS(file.r.biota)
+df.sediment <- readRDS(file.r.sediment)
+df.water <- readRDS(file.r.water)
 
-df.biota <- df.biota.in
+df.biota.2 <- readRDS(file.r.biota.2)
+df.sediment.2 <- readRDS(file.r.sediment.2)
+df.water.2 <- readRDS(file.r.water.2)
+
+df.biota.3 <- readRDS(file.r.biota.3)
+df.sediment.3 <- readRDS(file.r.sediment.3)
+df.water.3 <- readRDS(file.r.water.3)
 
 df.conversion<-read.table(paste0(datafolder,"species_avg_lipid_drywt_OSPAR.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
 df.species<-read.table(paste0(datafolder,"species_type.txt"), quote="",sep="\t", header=TRUE, fileEncoding="UTF-16", stringsAsFactors=FALSE)
@@ -73,9 +88,9 @@ df.biota <- filter(df.biota,MUNIT!="umol/min/mg protein")
 # replace "ug Sn/kg" with "ug/kg"
 df.biota$MUNIT <- ifelse(df.biota$MUNIT=="ug Sn/kg","ug/kg",df.biota$MUNIT)
 df.biota$MATRX<-ifelse(df.biota$MATRX=="MU&EP","MU",df.biota$MATRX)
+df.biota$MATRX<-ifelse(df.biota$MATRX=="MU&FA","MU",df.biota$MATRX)
 df.biota$Species<-ifelse(df.biota$Species=="Clupea harengus membras","Clupea harengus",df.biota$Species)
 df.biota$Value<-df.biota$Value*ifelse(df.biota$PARAM %in% c("DRYWT%","EXLIP%","FATWT%","LIPIDWT%") & df.biota$Value > 1000,0.01,1)
-
 
 
 df.biota <- left_join(df.biota,df.species,by=c("Species"="Species"))
@@ -86,40 +101,135 @@ df.biota <- select(df.biota,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,
                                Latitude,Longitude,NOINP,UNCRT,tblSpotID,
                                tblUploadID,tblAnalysisID,QFLAG,
                                LMQNT))
+#EIONET data
+# replace species names
+df.biota.2$Species<-ifelse(df.biota.2$Species=="","",df.biota.2$Species)
+df.biota.2$Species<-ifelse(df.biota.2$Species=="Mitylus galloprovincialis","Mytilus galloprovincialis",df.biota.2$Species)
+df.biota.2$Species<-ifelse(df.biota.2$Species=="PERCA FLUVIATILIS","Perca fluviatilis",df.biota.2$Species)
+df.biota.2$Species<-ifelse(df.biota.2$Species=="CLUPEA HARENGUS","Clupea harengus",df.biota.2$Species)
+df.biota.2$Species<-ifelse(df.biota.2$Species=="Arca noae; Holothuria spp.","Holothuria spp.",df.biota.2$Species)
+df.biota.2$Species<-ifelse(df.biota.2$Species=="Holothuria tubulosa","Holothuria spp.",df.biota.2$Species)
+
+df.biota.2 <- left_join(df.biota.2,df.species,by=c("Species"="Species"))
+df.biota.2 <- filter(df.biota.2,Type %in% c("Fish","Shellfish"))
+
+df.biota.2$Value <- df.biota.2$Value*ifelse(df.biota.2$QFLAG=="<",0.5,1)
+df.biota.2 <- select(df.biota.2,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,Determinand_HazSubs,
+                               Latitude,Longitude,NOINP,UNCRT,QFLAG,LMQNT,QA_comment,WaterbaseID))
+
+
+
+
+#------------------------- Calculate normalization values: wet weight and lipid weight ---------------------
 
 df.biota.norm <- df.biota %>%
   filter(PARAM %in% c("LNMEA","DRYWT%","EXLIP%","FATWT%","LIPIDWT%")) %>%
-  group_by(tblBioID,tblSampleID,Type,Species,PARAM,MATRX,BASIS,MUNIT) %>%
-  summarize(Value=mean(Value,na.rm=TRUE)) %>%
-  ungroup()
+  spread(PARAM,Value)
 
+if((length(names(df.biota.norm)[names(df.biota.norm)=="FATWT%"]))<1){
+  df.biota.norm[,'FATWT'] <- NA
+}else{
+  names(df.biota.norm)[names(df.biota.norm)=="FATWT%"]<-"FATWT"
+}
 
-df.biota.DRYWT <- df.biota.norm %>%
-  filter(PARAM == "DRYWT%") %>%
-  select(tblBioID,tblSampleID,Type,Species,MATRX,DRYWT=Value)
-df.biota.EXLIP <- df.biota.norm %>%
-  filter(PARAM == "EXLIP%") %>%
-  select(tblBioID,tblSampleID,Type,Species,MATRX,EXLIP=Value)
-df.biota.FATWT <- df.biota.norm %>%
-  filter(PARAM == "FATWT%") %>%
-  select(tblBioID,tblSampleID,Type,Species,MATRX,FATWT=Value)
-df.biota.LIPIDWT <- df.biota.norm %>%
-  filter(PARAM == "LIPIDWT%") %>%
-  select(tblBioID,tblSampleID,Type,Species,MATRX,LIPIDWT=Value)
+if((length(names(df.biota.norm)[names(df.biota.norm)=="EXLIP%"]))<1){
+  df.biota.norm[,'EXLIP'] <- NA
+}else{
+  names(df.biota.norm)[names(df.biota.norm)=="EXLIP%"]<-"EXLIP"
+}
 
-df.biota.norm<-full_join(df.biota.DRYWT,df.biota.FATWT,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
-df.biota.norm<-full_join(df.biota.norm,df.biota.LIPIDWT,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
-df.biota.norm<-full_join(df.biota.norm,df.biota.EXLIP,by=c("tblBioID","tblSampleID","Type","Species","MATRX"))
+if((length(names(df.biota.norm)[names(df.biota.norm)=="LIPIDWT%"]))<1){
+  df.biota.norm[,'LIPIDWT'] <- NA
+}else{
+  names(df.biota.norm)[names(df.biota.norm)=="LIPIDWT%"]<-"LIPIDWT"
+}
+
+names(df.biota.norm)[names(df.biota.norm)=="DRYWT%"]<-"DRYWT"
 
 df.biota.norm$FATWT <- ifelse(is.na(df.biota.norm$FATWT),
-                                 ifelse(is.na(df.biota.norm$LIPIDWT),
-                                        df.biota.norm$EXLIP,
-                                        df.biota.norm$LIPIDWT),
-                                df.biota.norm$FATWT)
-df.biota.norm <- select(df.biota.norm,-c(EXLIP,LIPIDWT))
-                               
+                              ifelse(is.na(df.biota.norm$LIPIDWT),
+                                     df.biota.norm$EXLIP,
+                                     df.biota.norm$LIPIDWT),
+                              df.biota.norm$FATWT)
+
+df.biota.norm <- df.biota.norm %>%
+  select(-c(EXLIP,LIPIDWT))
+
+# remove erroneous values
+df.biota.norm$OK <- 1
+df.biota.norm$OK <- ifelse(df.biota.norm$DRYWT > 40 & df.biota.norm$Type == "Shellfish",0,df.biota.norm$OK)
+df.biota.norm$OK <- ifelse(df.biota.norm$DRYWT < 3 & !is.na(df.biota.norm$DRYWT),0,df.biota.norm$OK)
+df.biota.norm$OK <- ifelse(df.biota.norm$DRYWT > 30 & df.biota.norm$Type == "Fish" & df.biota.norm$MATRX == "MU",0,df.biota.norm$OK)
+
+
+df.biota.norm <- df.biota.norm %>%
+  filter(OK == 1)
+
+
+df.biota.norm.species <- df.biota.norm %>%
+  group_by(Type,Species,MATRX,MUNIT) %>%
+  summarize(DRYWT_SPECIES=mean(DRYWT,na.rm=TRUE),FATWT_SPECIES=mean(FATWT,na.rm=TRUE)) %>%
+  ungroup()
+
+df.biota.norm.type <- df.biota.norm %>%
+  group_by(Type,MATRX,MUNIT) %>%
+  summarize(DRYWT_TYPE=mean(DRYWT,na.rm=TRUE),FATWT_TYPE=mean(FATWT,na.rm=TRUE)) %>%
+  ungroup()
+
+df.biota.norm.species <- df.biota.norm.species %>%
+  left_join(df.biota.norm.type,by=c("Type"="Type","MATRX"="MATRX","MUNIT"="MUNIT"))
+
+df.biota.norm.species$DRYWT_SPECIES<-ifelse(is.nan(df.biota.norm.species$DRYWT_SPECIES),
+                                            df.biota.norm.species$DRYWT_TYPE,
+                                            df.biota.norm.species$DRYWT_SPECIES)
+df.biota.norm.species$FATWT_SPECIES<-ifelse(is.nan(df.biota.norm.species$FATWT_SPECIES),
+                                            df.biota.norm.species$FATWT_TYPE,
+                                            df.biota.norm.species$FATWT_SPECIES)
+df.biota.norm.species<-select(df.biota.norm.species,-c(DRYWT_TYPE,FATWT_TYPE))
+
+
+df.biota.norm <- df.biota.norm %>%
+  group_by(tblBioID,tblSampleID,Type,Species,MATRX,MUNIT) %>%
+  summarize(DRYWT=mean(DRYWT,na.rm=TRUE),FATWT=mean(FATWT,na.rm=TRUE)) %>%
+  ungroup()
+
+df.biota.norm <- df.biota.norm %>%
+  left_join(df.biota.norm.species,by=c("Type"="Type","Species"="Species","MATRX"="MATRX","MUNIT"="MUNIT"))
+
+df.biota.norm$DRYWT<-ifelse(is.nan(df.biota.norm$DRYWT),
+                            ifelse(is.nan(df.biota.norm$DRYWT_SPECIES),NA,df.biota.norm$DRYWT_SPECIES),
+                            df.biota.norm$DRYWT)
+df.biota.norm$FATWT<-ifelse(is.nan(df.biota.norm$FATWT),
+                            ifelse(is.nan(df.biota.norm$FATWT_SPECIES),NA,df.biota.norm$FATWT_SPECIES),
+                            df.biota.norm$FATWT)
+df.biota.norm<-select(df.biota.norm,-c(DRYWT_SPECIES,FATWT_SPECIES))
+
+
+
+# Add the normalization values back to the main biota data
 df.biota <- filter(df.biota,!PARAM %in% c("LNMEA","DRYWT%","EXLIP%","FATWT%","LIPIDWT%"))
 df.biota <-left_join(df.biota, df.biota.norm)
+
+# -------------- add the EIONET data here --------------------
+
+names(df.biota.2)[names(df.biota.2)=="DRYWT."]<-"DRYWT"
+names(df.biota.2)[names(df.biota.2)=="EXLIP."]<-"EXLIP"
+names(df.biota.2)[names(df.biota.2)=="FATWT."]<-"FATWT"
+names(df.biota.2)[names(df.biota.2)=="LIPIDWT."]<-"LIPIDWT"
+
+df.biota.2$FATWT <- ifelse(is.na(df.biota.2$FATWT),
+                              ifelse(is.na(df.biota.2$LIPIDWT),
+                                     df.biota.2$EXLIP,
+                                     df.biota.2$LIPIDWT),
+                              df.biota.2$FATWT)
+
+df.biota.2<-df.biota.2%>% select(-c(EXLIP,LIPIDWT))
+
+df.biota<-bind_rows(df.biota,df.biota.2)
+
+# ------------------------------------------------------------------------------------------
+# ------------------------ bioeffects ------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 df.thrsh.be <- filter(df.thrsh,Category=="BioEffects") #Threshold.Species,
 df.thrsh <- select(df.thrsh,PARAM,GROUP,Category,Biota.Type,Threshold.Unit,Threshold.BASIS,Threshold.Tissue,Threshold.Value,Multiplier,Required)
@@ -131,10 +241,6 @@ df.bioeffects<-filter(df.biota,PARAM %in% c("VDSI","MNC","LMD"))
 df.biota<-filter(df.biota,!PARAM %in% c("VDSI","MNC","LMD"))
 
 
-# ------------------------------------------------------------------------------------------
-# ------------------------ bioeffects ------------------------------------------------------
-# ------------------------------------------------------------------------------------------
-
 
 # VDSI for Littorina, Buccinum and Nassarius 
 #  Littorina littorea
@@ -145,8 +251,8 @@ df.biota<-filter(df.biota,!PARAM %in% c("VDSI","MNC","LMD"))
 #  Nucella lapillus
 
 df.bioeffects.1<-inner_join(df.bioeffects,
-                           select(df.thrsh.be,Substance.name,PARAM,Threshold.Species,Threshold.Unit,Threshold.Value),
-                           by=c("PARAM"="PARAM","Species"="Threshold.Species"))
+                            select(df.thrsh.be,Substance.name,PARAM,Threshold.Species,Threshold.Unit,Threshold.Value),
+                            by=c("PARAM"="PARAM","Species"="Threshold.Species"))
 df.bioeffects.2<-inner_join(df.bioeffects,
                             select(df.thrsh.be,Substance.name,PARAM,Biota.Type,Threshold.Unit,Threshold.Value),
                             by=c("PARAM"="PARAM","Type"="Biota.Type"))
@@ -192,8 +298,8 @@ df.biota <- filter(df.biota,!MATRX=="EG")
 
 # match Biota with threshold values
 df.biota<-inner_join(df.biota,
-                    filter(df.thrsh,Category %in% c("Biota")),
-                    by=c("PARAM"="PARAM","Type"="Biota.Type"))
+                     filter(df.thrsh,Category %in% c("Biota")),
+                     by=c("PARAM"="PARAM","Type"="Biota.Type"))
 
 cat(paste0(nrow(df.biota)," rows\n"))
 
@@ -256,7 +362,7 @@ df.biota<-df.biota %>%
 
 df.biota<-df.biota %>%
   group_by(Country,GridID,MYEAR,DATE,Category,Type,Species,PARAM,GROUP,
-         BASIS,UNIT,Tissue,Multiplier,Threshold,Required) %>%
+           BASIS,UNIT,Tissue,Multiplier,Threshold,Required) %>%
   summarise(Value=mean(Value,na.rm=TRUE)) %>% 
   ungroup()
 
@@ -293,12 +399,14 @@ df.sed <- df.sediment
 df.sed$MUNIT <- ifelse(df.sed$MUNIT=="ug Sn/kg","ug/kg",df.sed$MUNIT)
 df.sed$Value <- df.sed$Value*ifelse(df.sed$QFLAG=="<",0.5,1)
 df.sed <- select(df.sed,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,
-                               Latitude,Longitude,UNCRT,tblSpotID,
-                               tblUploadID,tblAnalysisID,QFLAG,
-                               LMQNT))
+                           Latitude,Longitude,UNCRT,tblSpotID,
+                           tblUploadID,tblAnalysisID,QFLAG,
+                           LMQNT))
 df.sed <- filter(df.sed,DEPHU<0.01)
 df.sed$PARAM<-ifelse(df.sed$PARAM=="Cr","CR",df.sed$PARAM)
 
+
+# find normalization parameters (C-org, Al)
 df.sed.norm <- df.sed %>%
   filter(PARAM %in% c("AL","DRYWT%","Li","CORG")) %>%
   group_by(tblSampleID,PARAM,MATRX,BASIS,MUNIT) %>%
@@ -322,7 +430,7 @@ df.sed.AL <- df.sed.norm %>%
   left_join(factors,by=c("MUNIT"="unit"))  %>%
   mutate(AL=Value*factor,MUNIT="%") %>%
   select(-c(factor,MUNIT,Value))
-  
+
 df.sed.CORG <- df.sed.norm %>%
   filter(PARAM == "CORG") %>%
   select(tblSampleID,MATRX,BASIS,Value,MUNIT) %>%
@@ -336,9 +444,64 @@ df.sed.norm<-full_join(df.sed.norm,df.sed.CORG,by=c("tblSampleID","MATRX","BASIS
 rm(list=c("df.sed.AL","df.sed.CORG","df.sed.DRYWT"))
 df.sed <- df.sed %>%
   filter(!PARAM %in% c("AL","DRYWT%","Li","CORG")) 
-  
+
+# Add normalization parameters back to data
 df.sed <- left_join(df.sed,df.sed.norm,by=c("tblSampleID","MATRX","BASIS"))
 
+# Add the EIONET data
+
+df.sed.2 <- df.sediment.2
+df.sed.2$BASIS <- ifelse(df.sed.2$BASIS=="L","D",df.sed.2$BASIS)
+df.sed.2$Value <- df.sed.2$Value*ifelse(df.sed.2$QFLAG=="<",0.5,1)
+df.sed.2 <- select(df.sed.2,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,Determinand_HazSubs,
+                           Latitude,Longitude,UNCRT,QFLAG,LMQNT,
+                           QA_comment,WaterbaseID,Sampler,BottomDepth))
+
+names(df.sed.2)[names(df.sed.2)=="DRYWT."]<-"DRYWT"
+
+df.sed.2 <- filter(df.sed.2,DEPHU<0.01)
+df.sed.2$PARAM<-ifelse(df.sed.2$PARAM=="Cr","CR",df.sed.2$PARAM)
+
+
+df.sed <- bind_rows(df.sed,df.sed.2)
+
+# Correction of Sediment CORG, AL
+df.sed$CORG<-df.sed$CORG*ifelse(df.sed$CORG < 0.1,100,1)
+df.sed$AL<-df.sed$AL*ifelse(df.sed$AL<0.1,100,1)
+df.sed$AL<-ifelse(df.sed$AL<0.1,NA,df.sed$AL)
+
+# calculate global average for CORG, DRYWT, AL
+select<-df.sed %>% distinct(tblSampleID,GridID,DATE,CORG) %>% filter(CORG>0)
+select$lnCORG<-log(select$CORG)
+corgavg<-exp(mean(log(select$CORG),na.rm=T))
+ggplot(select,aes(lnCORG)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
+
+select<-df.sed %>% distinct(tblSampleID,GridID,DATE,DRYWT) %>% filter(DRYWT<90,DRYWT>1)
+drywtavg<-exp(mean(log(select$DRYWT),na.rm=T))
+ggplot(select,aes(DRYWT)) + theme_grey(base_size = 5)+geom_histogram(binwidth=1)
+
+select<-df.sed %>% distinct(tblSampleID,GridID,DATE,AL) %>% filter(AL<20,AL>0.1)
+alavg<-mean(select$AL,na.rm=T)
+ggplot(select,aes(AL)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
+
+
+# use the relationship between ln(WETWT) and ln(CORG): ln(WETWT)=3.68+0.323*ln(CORG)
+df.sed$DRYWT<-ifelse(is.na(df.sed$DRYWT),
+                     ifelse(df.sed$CORG<15,100-39.6*(df.sed$CORG^0.323),NA),
+                     df.sed$DRYWT)
+
+df.sed$CORG<-ifelse(is.na(df.sed$CORG),
+                    ifelse(df.sed$DRYWT>5,1.127e-05*((100-df.sed$DRYWT)^3.096),NA),
+                    df.sed$CORG)
+
+# If still missing, then use global averages
+df.sed$AL<-ifelse(is.na(df.sed$AL),alavg,df.sed$AL)
+df.sed$CORG<-ifelse(is.na(df.sed$CORG),corgavg,df.sed$CORG)
+df.sed$DRYWT<-ifelse(is.na(df.sed$DRYWT),drywtvg,df.sed$DRYWT)
+
+
+
+# Add threshold values
 df.thrsh.sed <- df.thrsh.sed %>%
   select(PARAM,GROUP,Threshold.Unit,Threshold.BASIS,REF.PARAM,REF.VALUE,REF.UNIT,Threshold.Value,Threshold.Unit,Required)
 df.thrsh.sed$REF.PARAM<-ifelse(df.thrsh.sed$REF.PARAM=="","CORG",df.thrsh.sed$REF.PARAM)
@@ -476,4 +639,4 @@ df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>5,4,df.CHASE_TRNSP$WAT_CAT)
 df.CHASE_TRNSP$WAT_CAT<-ifelse(df.CHASE_TRNSP$Water>10,5,df.CHASE_TRNSP$WAT_CAT)
 
 
-write.table(df.CHASE_TRNSP,file=paste0(resfolder,"CHASE_results.csv"), row.names=FALSE,quote=FALSE,sep=',', na="")
+#write.table(df.CHASE_TRNSP,file=paste0(resfolder,"CHASE_results.csv"), row.names=FALSE,quote=FALSE,sep=',', na="")
