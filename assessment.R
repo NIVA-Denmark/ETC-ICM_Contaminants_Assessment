@@ -93,6 +93,7 @@ df.biota$Species<-ifelse(df.biota$Species=="Clupea harengus membras","Clupea har
 df.biota$Value<-df.biota$Value*ifelse(df.biota$PARAM %in% c("DRYWT%","EXLIP%","FATWT%","LIPIDWT%") & df.biota$Value > 1000,0.01,1)
 
 
+df.biota$Species<- trimws(df.biota$Species)
 df.biota <- left_join(df.biota,df.species,by=c("Species"="Species"))
 df.biota <- filter(df.biota,Type %in% c("Fish","Shellfish"))
 
@@ -103,6 +104,7 @@ df.biota <- select(df.biota,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,
                                LMQNT))
 #EIONET data
 # replace species names
+df.biota.2$Species<- trimws(df.biota.2$Species)
 df.biota.2$Species<-ifelse(df.biota.2$Species=="","",df.biota.2$Species)
 df.biota.2$Species<-ifelse(df.biota.2$Species=="Mitylus galloprovincialis","Mytilus galloprovincialis",df.biota.2$Species)
 df.biota.2$Species<-ifelse(df.biota.2$Species=="PERCA FLUVIATILIS","Perca fluviatilis",df.biota.2$Species)
@@ -117,10 +119,21 @@ df.biota.2$Value <- df.biota.2$Value*ifelse(df.biota.2$QFLAG=="<",0.5,1)
 df.biota.2 <- select(df.biota.2,-c(MPROG,RLABO,ALABO,VFLAG,DETLI,METCU,STATN,Determinand_HazSubs,
                                Latitude,Longitude,NOINP,UNCRT,QFLAG,LMQNT,QA_comment,WaterbaseID))
 
+df.biota.3$PARAM<-toupper(df.biota.3$PARAM)
+df.biota.3$LT<-grepl("<",df.biota.3$Value)
+df.biota.3$Value<-as.numeric(ifelse(df.biota.3$LT,substr(df.biota.3$Value,2,99),df.biota.3$Value))*ifelse(df.biota.3$LT,0.5,1)
+df.biota.3$LT<-NULL
+df.biota.3 <- df.biota.3 %>% filter(!is.na(df.biota.3$Value))
+df.biota.3 <- df.biota.3 %>% filter(!df.biota.3$PARAM=="")
+names(df.biota.3)[names(df.biota.3)=="GRIDID"]<-"GridID"
+names(df.biota.3)[names(df.biota.3)=="MATRIX"]<-"MATRX"
+df.biota.3 <- df.biota.3 %>% select(-c(X,PARAM.portugal,Navn,Tissue,Latitude,Longitude))
+df.biota.3$Species<- trimws(df.biota.3$Species)
+df.biota.3 <- left_join(df.biota.3,df.species,by=c("Species"="Species"))
+df.biota.3 <- filter(df.biota.3,Type %in% c("Fish","Shellfish"))
 
 
-
-#------------------------- Calculate normalization values: wet weight and lipid weight ---------------------
+#----------------Biota - Calculate normalization values: wet weight and lipid weight ---------------------
 
 df.biota.norm <- df.biota %>%
   filter(PARAM %in% c("LNMEA","DRYWT%","EXLIP%","FATWT%","LIPIDWT%")) %>%
@@ -210,7 +223,7 @@ df.biota.norm<-select(df.biota.norm,-c(DRYWT_SPECIES,FATWT_SPECIES))
 df.biota <- filter(df.biota,!PARAM %in% c("LNMEA","DRYWT%","EXLIP%","FATWT%","LIPIDWT%"))
 df.biota <-left_join(df.biota, df.biota.norm)
 
-# -------------- add the EIONET data here --------------------
+# -------------- Biota - add the EIONET data here --------------------
 
 names(df.biota.2)[names(df.biota.2)=="DRYWT."]<-"DRYWT"
 names(df.biota.2)[names(df.biota.2)=="EXLIP."]<-"EXLIP"
@@ -226,6 +239,13 @@ df.biota.2$FATWT <- ifelse(is.na(df.biota.2$FATWT),
 df.biota.2<-df.biota.2%>% select(-c(EXLIP,LIPIDWT))
 
 df.biota<-bind_rows(df.biota,df.biota.2)
+
+# -------------- Biota - add the PT data here --------------------
+df.biota<-bind_rows(df.biota,df.biota.3)
+
+df.biota$Species<- trimws(df.biota$Species)
+
+
 
 # ------------------------------------------------------------------------------------------
 # ------------------------ bioeffects ------------------------------------------------------
@@ -386,6 +406,7 @@ df.biota<-df.biota %>%
 df.biota$CR<-df.biota$Value/df.biota$Threshold
 
 df.chase.biota<-df.biota %>%
+  filter(!is.na(CR)) %>%
   group_by(GridID) %>%
   summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
   ungroup()
@@ -474,15 +495,15 @@ df.sed$AL<-ifelse(df.sed$AL<0.1,NA,df.sed$AL)
 select<-df.sed %>% distinct(tblSampleID,GridID,DATE,CORG) %>% filter(CORG>0)
 select$lnCORG<-log(select$CORG)
 corgavg<-exp(mean(log(select$CORG),na.rm=T))
-ggplot(select,aes(lnCORG)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
+#ggplot(select,aes(lnCORG)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
 
 select<-df.sed %>% distinct(tblSampleID,GridID,DATE,DRYWT) %>% filter(DRYWT<90,DRYWT>1)
 drywtavg<-exp(mean(log(select$DRYWT),na.rm=T))
-ggplot(select,aes(DRYWT)) + theme_grey(base_size = 5)+geom_histogram(binwidth=1)
+#ggplot(select,aes(DRYWT)) + theme_grey(base_size = 5)+geom_histogram(binwidth=1)
 
 select<-df.sed %>% distinct(tblSampleID,GridID,DATE,AL) %>% filter(AL<20,AL>0.1)
 alavg<-mean(select$AL,na.rm=T)
-ggplot(select,aes(AL)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
+#ggplot(select,aes(AL)) + theme_grey(base_size = 5)+geom_histogram(binwidth=0.1)
 
 
 # use the relationship between ln(WETWT) and ln(CORG): ln(WETWT)=3.68+0.323*ln(CORG)
@@ -497,8 +518,34 @@ df.sed$CORG<-ifelse(is.na(df.sed$CORG),
 # If still missing, then use global averages
 df.sed$AL<-ifelse(is.na(df.sed$AL),alavg,df.sed$AL)
 df.sed$CORG<-ifelse(is.na(df.sed$CORG),corgavg,df.sed$CORG)
-df.sed$DRYWT<-ifelse(is.na(df.sed$DRYWT),drywtvg,df.sed$DRYWT)
+df.sed$DRYWT<-ifelse(is.na(df.sed$DRYWT),drywtavg,df.sed$DRYWT)
 
+df.sed$NORM<-0
+# Add the PT data (already normalized)
+df.sed.PT<-df.sediment.3 %>% select(-c(Nr,Latitude,Longitude,Datum,temperature,pH,EH,
+                                           Determinand_HazSubs))
+df.sed.PT$REF<-substr(df.sed.PT$PARAM,1+regexpr("/",df.sed.PT$PARAM),99)
+df.sed.PT$Factor1<- 10^(as.numeric(substr(df.sed.PT$Unit,regexpr("-",df.sed.PT$Unit),99)))
+df.sed.PT$MUNIT<-ifelse(df.sed.PT$Factor1<1e-06,"µg/kg","mg/kg")
+df.sed.PT$Factor2<-ifelse(df.sed.PT$Factor1<1e-06, 10^9, 10^6)
+df.sed.PT$Factor3<-ifelse(df.sed.PT$REF=="Al",df.sed.PT$Al/100,NA)
+df.sed.PT$Factor3<-ifelse(df.sed.PT$REF=="Corg",df.sed.PT$Corg/100,df.sed.PT$Factor3)
+df.sed.PT$Value2<-ifelse(df.sed.PT$Value=="LD","0",df.sed.PT$Value)
+df.sed.PT$Value2<-ifelse(substr(df.sed.PT$Value2,1,1)=="<",
+                         as.numeric(substr(df.sed.PT$Value2,2,99))*0.5,
+                         as.numeric(df.sed.PT$Value2))
+
+df.sed.PT$Value3<-df.sed.PT$Value2*df.sed.PT$Factor1*df.sed.PT$Factor2*df.sed.PT$Factor3
+df.sed.PT$DRYWT<-100-df.sed.PT$water_content
+df.sed.PT<-df.sed.PT %>% select(-c(water_content,PARAM,REF,Factor1,Factor2,Factor3,
+                                   Value,Value2,Unit))
+names(df.sed.PT)[names(df.sed.PT)=="Al"]<-"AL"
+names(df.sed.PT)[names(df.sed.PT)=="Corg"]<-"CORG"
+names(df.sed.PT)[names(df.sed.PT)=="PARAM2"]<-"PARAM"
+names(df.sed.PT)[names(df.sed.PT)=="Value3"]<-"Value"
+#names(df.sed.PT)[names(df.sed.PT)=="Sample_Code"]<-"tblSampleID"
+
+#test<-df.sed.PT %>% filter(Sample_Code=="PT_TW_RA_WB1_1")
 
 
 # Add threshold values
@@ -519,30 +566,55 @@ df.sed$factor<-ifelse(df.sed$REF.PARAM=="CORG" & !is.na(df.sed$CORG),df.sed$CORG
 
 df.sed <- left_join(df.sed,df.unit.factor,by=c("MUNIT","Threshold.Unit"))
 
-df.sed$Value<-df.sed$Value*df.sed$factor*df.sed$Factor.Unit
+BASIS<-c("D","D","W","W")
+Threshold.BASIS<-c("D","W","D","W")
+Power<-c(0,1,-1,0)
+
+df.basis<-data.frame(BASIS,Threshold.BASIS,Power,stringsAsFactors=F)
+
+df.sed <- left_join(df.sed,df.basis,by=c("BASIS"="BASIS","Threshold.BASIS"="Threshold.BASIS"))
+
+df.sed$Factor.Basis<-(df.sed$DRYWT/100)^df.sed$Power
+df.sed$Power<-NULL
+
+df.sed$Value<-df.sed$Value*df.sed$factor*df.sed$Factor.Unit*df.sed$Factor.Basis
 
 df.sed$BASIS<-df.sed$Threshold.BASIS
 df.sed$Unit<-df.sed$Threshold.Unit
+
+
+# We need to take the average value per Grid before comparing with threshold value!
+
 
 df.sed<-df.sed %>%
   filter(!is.na(Threshold.Value)) %>%
   select(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Value,Threshold=Threshold.Value,Required) %>%
   arrange(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Threshold)
 
+# Average by GridID, Date, PARAM
+# df.sed<-df.sed %>%
+#   group_by(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Threshold,Required) %>%
+#   summarise(Value=mean(Value),na.rm=TRUE) %>%
+#   ungroup()
+
+# Average by GridID, PARAM
 df.sed<-df.sed %>%
-  group_by(Country,GridID,MYEAR,DATE,PARAM,GROUP,Unit,Threshold,Required) %>%
+  group_by(Country,GridID,PARAM,GROUP,Unit,Threshold,Required) %>%
   summarise(Value=mean(Value),na.rm=TRUE) %>%
   ungroup()
 
+
 # combine group variables
 df.sed<-df.sed %>%
-  group_by(Country,GridID,MYEAR,DATE,GROUP,Unit,Threshold,Required) %>%
+  group_by(Country,GridID,GROUP,Unit,Threshold,Required) %>%
   summarise(Value=sum(Value),n=n(),nreq=sum(Required)) %>%
   ungroup()
 
 df.sed$CR<-df.sed$Value/df.sed$Threshold
 
+
 df.chase.sed<-df.sed %>%
+  filter(!is.na(CR)) %>%
   group_by(GridID) %>%
   summarise(SumCR=sum(CR,na.rm=TRUE),n=n()) %>%
   ungroup()
@@ -550,7 +622,7 @@ df.chase.sed<-df.sed %>%
 df.chase.sed$CSum<-df.chase.sed$SumCR/sqrt(df.chase.sed$n)
 
 # ------------------------------------------------------------------------------------------
-# ------------------------ sediment ------------------------------------------------------
+# ------------------------ water ------------------------------------------------------
 # ------------------------------------------------------------------------------------------
 
 
@@ -558,7 +630,31 @@ df.wat <- df.water
 df.wat$MUNIT <- ifelse(df.wat$MUNIT=="ug Sn/kg","ug/kg",df.wat$MUNIT)
 df.wat$Value <- df.wat$Value*ifelse(df.wat$QFLAG=="<",0.5,1)
 df.wat <- df.wat %>%
-  select(Country,GridID,MYEAR,DATE,PARAM,Value,MUNIT) %>%
+  select(Country,GridID,MYEAR,DATE,PARAM,Value,MUNIT)
+
+df.wat.2 <- df.water.2
+df.wat.2$MUNIT <- ifelse(df.wat.2$MUNIT=="ug Sn/kg","ug/kg",df.wat.2$MUNIT)
+df.wat.2$Value <- df.wat.2$Value*ifelse(df.wat.2$QFLAG=="<",0.5,1)
+df.wat.2 <- df.wat.2 %>%
+  select(Country,GridID,MYEAR,DATE,PARAM,Value,MUNIT)
+
+df.wat.3 <- df.water.3 
+df.wat.3$MUNIT <- ifelse(df.wat.3$MUNIT=="ug Sn/kg","ug/kg",df.wat.3$MUNIT)
+df.wat.3$MUNIT<-tolower(df.wat.3$MUNIT)
+df.wat.3$PARAM<-toupper(df.wat.3$PARAM)
+df.wat.3$Value<-gsub(",",".", df.wat.3$Value)
+df.wat.3$Value2 <- ifelse(substr(df.wat.3$Value,1,1)=="<",
+                         0.5*as.numeric(substr(df.wat.3$Value,2,99)),
+                         as.numeric(df.wat.3$Value))
+df.wat.3 <- df.wat.3 %>%
+  select(Country,GridID=GRIDID,MYEAR,DATE,PARAM,Value=Value2,MUNIT)
+
+df.wat<-bind_rows(df.wat,df.wat.2,df.wat.3)
+
+df.wat<-df.wat %>% group_by(Country,GridID,PARAM,MUNIT) %>%
+  summarise(Value=mean(Value,na.rm=T))
+
+df.wat <- df.wat %>%
   left_join(select(df.thrsh.wat,GROUP,PARAM,Threshold.Unit,Threshold.Value,Required),by=c("PARAM")) %>%
   filter(!is.na(Threshold.Value))
 
@@ -567,11 +663,11 @@ df.wat<-df.wat %>%
 
 df.wat$Value<-df.wat$Value*df.wat$Factor.Unit
 df.wat <- df.wat %>%
-  select(Country,GridID,MYEAR,DATE,GROUP,PARAM,Unit=Threshold.Unit,Value,Threshold=Threshold.Value,Required)
+  select(Country,GridID,GROUP,PARAM,Unit=Threshold.Unit,Value,Threshold=Threshold.Value,Required)
 
 # combine group variables
 df.wat<-df.wat %>%
-  group_by(Country,GridID,MYEAR,DATE,GROUP,Unit,Threshold,Required) %>%
+  group_by(Country,GridID,GROUP,Unit,Threshold,Required) %>%
   summarise(Value=sum(Value),n=n(),nreq=sum(Required)) %>%
   ungroup()
 

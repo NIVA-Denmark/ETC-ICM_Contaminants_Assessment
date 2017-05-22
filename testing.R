@@ -387,7 +387,7 @@ df2<-df.sed %>%
   summarise()
 df2$lnAL<-log(df2$AL)
 df2$lnCORG<-log(df2$CORG)
-df2$CORR<-ifelse(df2$AL<0.1,ifelse(df2$lnCORG< -3,"2","1"),"0")
+df2$CORR<-ifelse(df2$AL<0.1,ifelse(df2$CORG< 0.1,"2","1"),"0")
 
 # plot DOME 
 fit<-lm(formula=lnAL~lnCORG,data=df2)
@@ -395,7 +395,7 @@ fit<-lm(formula=lnAL~lnCORG,data=df2)
 p<-ggplot(df2,aes(x=lnCORG,y=lnAL))
 p<-p+geom_jitter(size=2,aes(colour=CORR))
 p<-p+ scale_color_grey() + theme_classic() #scale_color_manual(values=c("#000000", "#666666", "#AAAAAA"))
-p<-p+geom_vline(xintercept=c(-3), linetype="dotted")
+p<-p+geom_vline(xintercept=c(-2.302585), linetype="dotted")
 p<-p+geom_hline(yintercept=c(-2.302585), linetype="dotted")
 p
 ggsave("lin_regr_sed_corg_vs_AL_uncorrected.png", plot=p,width=20, height=20, units="cm",dpi=300)
@@ -410,7 +410,7 @@ p<-ggplot(df2,aes(x=lnCORG,y=lnAL))
 p<-p+geom_jitter(size=2,aes(colour=CORR))
 p<-p+ scale_color_grey() + theme_classic()
 p<-p+geom_smooth(method='lm',formula=y~x,na.rm=T)
-p<-p+geom_vline(xintercept=c(-3), linetype="dotted")
+p<-p+geom_vline(xintercept=c(-2.302585), linetype="dotted")
 p<-p+geom_hline(yintercept=c(-2.302585), linetype="dotted")
 p<-p+labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 3),
                         "Intercept =",signif(fit$coef[[1]],3 ),
@@ -419,4 +419,21 @@ p<-p+labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 3),
 p
 ggsave("lin_regr_sed_corg_vs_AL.png", plot=p,width=20, height=20, units="cm",dpi=300)
 
+# -----------------------------------------
+df.test<-as.data.frame(seq(0.1,20,by=0.1))
+names(df.test)<-c("CORG")
+df.test$DRYWT<-100-39.6*(df.test$CORG^0.323)
+p<-ggplot(df.test,aes(x=CORG,y=DRYWT))
+p<-p+geom_jitter(size=2)
+p
 
+df.test<-as.data.frame(seq(5,90,by=1))
+names(df.test)<-c("DRYWT")
+df.test$CORG<-1.127e-05*(100-df.test$DRYWT)^3.096
+p<-ggplot(df.test,aes(x=DRYWT,y=CORG))
+p<-p+geom_jitter(size=2)
+p
+
+
+
+test<-df.sed %>% filter(GridID=="20kmE488N202")
